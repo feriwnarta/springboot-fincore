@@ -1,0 +1,92 @@
+spring:
+  application:
+    name: loan-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8180/realms/fincore}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${spring.security.oauth2.resourceserver.jwt.issuer-uri}/protocol/openid-connect/certs}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${LOAN_KAFKA_CONSUMER_GROUP:fincore-loan-service}
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  datasource:
+    url: ${LOAN_DB_URL:jdbc:postgresql://localhost:5432/fincore_loan}
+    username: ${LOAN_DB_USERNAME:${USER}}
+    password: ${LOAN_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${LOAN_DB_POOL_SIZE:10}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    baseline-on-migrate: false
+
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: Loan Service
+        url: ${FINCORE_SWAGGER_PUBLIC_BASE_URL:http://localhost:8000}/v3/api-docs
+      - name: Ledger Service
+        url: ${FINCORE_SWAGGER_PUBLIC_BASE_URL:http://localhost:8000}/docs/openapi/ledger
+      - name: Search Service
+        url: ${FINCORE_SWAGGER_PUBLIC_BASE_URL:http://localhost:8000}/docs/openapi/search
+    urls-primary-name: Loan Service
+    persist-authorization: true
+
+fincore:
+  auth:
+    keycloak-token-url: ${KEYCLOAK_TOKEN_URL:${OIDC_ISSUER_URI:http://localhost:8180/realms/fincore}/protocol/openid-connect/token}
+    client-id: ${KEYCLOAK_AUTH_CLIENT_ID:fincore-cli}
+    connect-timeout: ${KEYCLOAK_CONNECT_TIMEOUT:2s}
+    read-timeout: ${KEYCLOAK_READ_TIMEOUT:5s}
+  security:
+    mode: ${FINCORE_SECURITY_MODE:oauth2}
+    audience: ${OIDC_AUDIENCE:fincore-api}
+  cache:
+    product:
+      ttl: ${FINCORE_PRODUCT_CACHE_TTL:5m}
+      ttl-jitter: ${FINCORE_PRODUCT_CACHE_TTL_JITTER:30s}
+      redis-timeout: ${FINCORE_PRODUCT_CACHE_REDIS_TIMEOUT:250ms}
+      database-timeout: ${FINCORE_PRODUCT_CACHE_DATABASE_TIMEOUT:2s}
+  kafka:
+    loan-topic: ${FINCORE_LOAN_EVENTS_TOPIC:fincore.loan.events.v1}
+    ledger-topic: ${FINCORE_LEDGER_EVENTS_TOPIC:fincore.ledger.events.v1}
+    ledger-consumer-group: ${LOAN_KAFKA_CONSUMER_GROUP:fincore-loan-service}
+    ledger-consumer-auto-startup: ${FINCORE_LEDGER_CONSUMER_AUTO_STARTUP:false}
+    consumer:
+      retry-interval: ${FINCORE_KAFKA_CONSUMER_RETRY_INTERVAL:1000ms}
+      max-attempts: ${FINCORE_KAFKA_CONSUMER_MAX_ATTEMPTS:3}
+      dlq-suffix: ${FINCORE_KAFKA_DLQ_SUFFIX:.DLQ}
+    outbox-relay:
+      enabled: ${FINCORE_OUTBOX_RELAY_ENABLED:false}
+      fixed-delay: ${FINCORE_OUTBOX_RELAY_FIXED_DELAY:1000ms}
+      batch-size: ${FINCORE_OUTBOX_RELAY_BATCH_SIZE:50}
+      claim-lease: ${FINCORE_OUTBOX_RELAY_CLAIM_LEASE:30s}
+      send-timeout: ${FINCORE_OUTBOX_RELAY_SEND_TIMEOUT:5s}

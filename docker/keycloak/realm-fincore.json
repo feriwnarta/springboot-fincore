@@ -1,0 +1,135 @@
+{
+  "realm": "fincore",
+  "displayName": "FinCore (Local Development)",
+  "enabled": true,
+  "roles": {
+    "client": {
+      "fincore-api": [
+        { "name": "CUSTOMER" },
+        { "name": "LOAN_OPERATOR" },
+        { "name": "LOAN_APPROVER" },
+        { "name": "SAVINGS_OPERATOR" },
+        { "name": "LOAN_PRODUCT_ADMIN" }
+      ]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "fincore-api",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "fincore-cli",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "defaultClientScopes": ["basic"],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "fincore-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "fincore-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "fincore-api roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "fincore-api",
+            "claim.name": "resource_access.fincore-api.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "customer_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "customer_id",
+            "claim.name": "customer_id",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "customer1",
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Customer One",
+      "email": "customer1@example.invalid",
+      "attributes": { "customer_id": ["CUST-001"] },
+      "clientRoles": { "fincore-api": ["CUSTOMER"] },
+      "credentials": [{ "type": "password", "value": "customer1", "temporary": false }]
+    },
+    {
+      "username": "customer2",
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Customer Two",
+      "email": "customer2@example.invalid",
+      "attributes": { "customer_id": ["CUST-002"] },
+      "clientRoles": { "fincore-api": ["CUSTOMER"] },
+      "credentials": [{ "type": "password", "value": "customer2", "temporary": false }]
+    },
+    {
+      "username": "loan-operator",
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Loan Operator",
+      "email": "loan-operator@example.invalid",
+      "clientRoles": { "fincore-api": ["LOAN_OPERATOR"] },
+      "credentials": [{ "type": "password", "value": "loan-operator", "temporary": false }]
+    },
+    {
+      "username": "loan-approver",
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Loan Approver",
+      "email": "loan-approver@example.invalid",
+      "clientRoles": { "fincore-api": ["LOAN_APPROVER"] },
+      "credentials": [{ "type": "password", "value": "loan-approver", "temporary": false }]
+    },
+    {
+      "username": "savings-operator",
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Savings Operator",
+      "email": "savings-operator@example.invalid",
+      "clientRoles": { "fincore-api": ["SAVINGS_OPERATOR"] },
+      "credentials": [{ "type": "password", "value": "savings-operator", "temporary": false }]
+    },
+    {
+      "username": "product-admin",
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Product Admin",
+      "email": "product-admin@example.invalid",
+      "clientRoles": { "fincore-api": ["LOAN_PRODUCT_ADMIN"] },
+      "credentials": [{ "type": "password", "value": "product-admin", "temporary": false }]
+    }
+  ]
+}

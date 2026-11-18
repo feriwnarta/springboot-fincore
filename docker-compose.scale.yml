@@ -1,0 +1,30 @@
+services:
+  loan-service-2:
+    profiles: ["scale"]
+    image: spring-boot-fincore-loan-service
+    environment:
+      LOAN_DB_URL: jdbc:postgresql://postgres:5432/fincore_loan
+      LOAN_DB_USERNAME: fincore
+      LOAN_DB_PASSWORD: fincore_local
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      LOAN_KAFKA_CONSUMER_GROUP: fincore-loan-service
+      FINCORE_LEDGER_CONSUMER_AUTO_STARTUP: "true"
+      FINCORE_OUTBOX_RELAY_ENABLED: "true"
+      FINCORE_SECURITY_MODE: oauth2
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/realms/fincore}
+      OIDC_JWK_SET_URI: ${OIDC_JWK_SET_URI:-http://keycloak:8080/realms/fincore/protocol/openid-connect/certs}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-fincore-api}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      keycloak: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      - "8084:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

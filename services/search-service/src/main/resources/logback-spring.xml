@@ -1,0 +1,11 @@
+<configuration>
+    <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="search-service"/>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{ISO8601} level=%-5level service=${serviceName} correlationId=%X{correlationId:-} causationId=%X{causationId:-} requestId=%X{requestId:-} actorId=%X{actorId:-} actorRole=%X{actorRole:-} aggregateType=%X{aggregateType:-} aggregateId=%X{aggregateId:-} aggregateVersion=%X{aggregateVersion:-} eventId=%X{eventId:-} eventType=%X{eventType:-} businessReference=%X{businessReference:-} operation=%X{operation:-} outcome=%X{outcome:-} durationMs=%X{durationMs:-} logger=%logger{36} message="%msg"%n</pattern>
+        </encoder>
+    </appender>
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

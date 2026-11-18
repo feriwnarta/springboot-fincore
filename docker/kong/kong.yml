@@ -1,0 +1,93 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: loan-service
+    url: http://loan-service:8081
+    routes:
+      - name: loan-products
+        paths: ["/api/v1/loan-products"]
+        methods: ["POST"]
+        strip_path: false
+      - name: loan-auth
+        paths: ["/api/v1/auth"]
+        strip_path: false
+      - name: loan-quotes
+        paths: ["/api/v1/loan-quotes"]
+        strip_path: false
+      - name: loan-applications
+        paths: ["/api/v1/loan-applications"]
+        methods: ["POST"]
+        strip_path: false
+      - name: loan-resources
+        paths: ["/api/v1/loans"]
+        strip_path: false
+      - name: loan-reports
+        paths: ["/api/v1/reports/loans"]
+        strip_path: false
+      - name: loan-swagger-ui
+        paths: ["/swagger-ui.html", "/swagger-ui"]
+        strip_path: false
+      - name: loan-openapi
+        paths: ["/v3/api-docs"]
+        strip_path: false
+        preserve_host: true
+
+  - name: unified-swagger-ui
+    url: http://loan-service:8081/swagger-ui.html
+    routes:
+      - name: unified-swagger-ui
+        paths: ["/docs"]
+        strip_path: true
+        preserve_host: true
+
+  - name: ledger-openapi
+    url: http://ledger-service:8082/v3/api-docs
+    routes:
+      - name: ledger-openapi
+        paths: ["/docs/openapi/ledger"]
+        strip_path: true
+        preserve_host: true
+
+  - name: search-openapi
+    url: http://search-service:8083/v3/api-docs
+    routes:
+      - name: search-openapi
+        paths: ["/docs/openapi/search"]
+        strip_path: true
+        preserve_host: true
+
+  - name: ledger-service
+    url: http://ledger-service:8082
+    routes:
+      - name: journals
+        paths: ["/api/v1/journals"]
+        strip_path: false
+      - name: savings
+        paths: ["/api/v1/savings"]
+        strip_path: false
+
+  - name: search-service
+    url: http://search-service:8083
+    routes:
+      - name: search
+        paths: ["/api/v1/search"]
+        strip_path: false
+      - name: loan-products-read
+        paths: ["/api/v1/loan-products"]
+        methods: ["GET"]
+        strip_path: false
+      - name: loan-applications-read
+        paths: ["/api/v1/loan-applications"]
+        methods: ["GET"]
+        strip_path: false
+      - name: savings-accounts-read
+        paths: ["~/api/v1/savings/accounts$"]
+        methods: ["GET"]
+        regex_priority: 20
+        strip_path: false
+      - name: loan-activity
+        paths: ["~/api/v1/loans/[^/]+/activity$"]
+        methods: ["GET"]
+        regex_priority: 10
+        strip_path: false

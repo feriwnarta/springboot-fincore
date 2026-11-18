@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: search-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8180/realms/fincore}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${spring.security.oauth2.resourceserver.jwt.issuer-uri}/protocol/openid-connect/certs}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${SEARCH_KAFKA_CONSUMER_GROUP:fincore-search-service}
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    streams:
+      application-id: ${SEARCH_KAFKA_STREAMS_APPLICATION_ID:fincore-search-streams}
+      auto-startup: ${SEARCH_KAFKA_STREAMS_AUTO_STARTUP:false}
+  mongodb:
+    uri: ${SEARCH_MONGODB_URI:mongodb://localhost:27017/fincore_search}
+  elasticsearch:
+    uris: ${SEARCH_ELASTICSEARCH_URI:http://localhost:9200}
+
+server:
+  port: 8083
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+fincore:
+  security:
+    audience: ${OIDC_AUDIENCE:fincore-api}
+  kafka:
+    loan-topic: ${FINCORE_LOAN_EVENTS_TOPIC:fincore.loan.events.v1}
+    ledger-topic: ${FINCORE_LEDGER_EVENTS_TOPIC:fincore.ledger.events.v1}
+    analytics-topic: ${FINCORE_ANALYTICS_TOPIC:fincore.loan.analytics.5m.v1}
+    consumer-group: ${SEARCH_KAFKA_CONSUMER_GROUP:fincore-search-service}
+    consumer-auto-startup: ${SEARCH_KAFKA_CONSUMER_AUTO_STARTUP:false}
+    retry-interval: ${FINCORE_KAFKA_CONSUMER_RETRY_INTERVAL:1000ms}
+    max-attempts: ${FINCORE_KAFKA_CONSUMER_MAX_ATTEMPTS:3}

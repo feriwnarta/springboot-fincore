@@ -1,0 +1,242 @@
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    platform: linux/amd64
+    environment:
+      POSTGRES_DB: fincore_loan
+      POSTGRES_USER: fincore
+      POSTGRES_PASSWORD: fincore_local
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U fincore -d fincore_loan"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    command: ["start-dev", "--import-realm"]
+    mem_limit: 1g
+    environment:
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_URL_DATABASE: fincore_keycloak
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USERNAME:-fincore_keycloak}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-fincore_keycloak_local}
+      KC_HOSTNAME: http://localhost:8180
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change_me_locally}
+    volumes:
+      - ./docker/keycloak/realm-fincore.json:/opt/keycloak/data/import/fincore-realm.json:ro
+    ports:
+      - "127.0.0.1:8180:8080"
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bash -ec 'exec 3<>/dev/tcp/127.0.0.1/9000;
+          printf "HEAD /health/ready HTTP/1.0\r\n\r\n" >&3;
+          IFS= read -r status <&3;
+          [[ "$$status" == HTTP/*" 200 "* ]]'
+      interval: 5s
+      timeout: 3s
+      start_period: 60s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:19093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:19093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+    ports:
+      - "127.0.0.1:9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:19092 --list >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.6
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - elasticsearch-data-v9:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  mongodb:
+    image: mongo:8.0
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' localhost:27017/test | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  loan-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      args:
+        SERVICE: loan-service
+    environment:
+      LOAN_DB_URL: jdbc:postgresql://postgres:5432/fincore_loan
+      LOAN_DB_USERNAME: fincore
+      LOAN_DB_PASSWORD: fincore_local
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      LOAN_KAFKA_CONSUMER_GROUP: fincore-loan-service
+      FINCORE_LEDGER_CONSUMER_AUTO_STARTUP: "true"
+      FINCORE_OUTBOX_RELAY_ENABLED: "true"
+      FINCORE_SECURITY_MODE: oauth2
+      FINCORE_API_PUBLIC_BASE_URL: http://localhost:8000
+      FINCORE_SWAGGER_PUBLIC_BASE_URL: http://localhost:8000
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/fincore/protocol/openid-connect/token
+      KEYCLOAK_AUTH_CLIENT_ID: fincore-cli
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/realms/fincore}
+      OIDC_JWK_SET_URI: ${OIDC_JWK_SET_URI:-http://keycloak:8080/realms/fincore/protocol/openid-connect/certs}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-fincore-api}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      keycloak: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  ledger-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      args:
+        SERVICE: ledger-service
+    environment:
+      LEDGER_DB_URL: jdbc:postgresql://postgres:5432/fincore_ledger
+      LEDGER_DB_USERNAME: fincore
+      LEDGER_DB_PASSWORD: fincore_local
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      LEDGER_KAFKA_CONSUMER_GROUP: fincore-ledger-service
+      FINCORE_LEDGER_OUTBOX_RELAY_ENABLED: "true"
+      FINCORE_LEDGER_CONSUMER_AUTO_STARTUP: "true"
+      FINCORE_SECURITY_MODE: oauth2
+      FINCORE_API_PUBLIC_BASE_URL: http://localhost:8000
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/realms/fincore}
+      OIDC_JWK_SET_URI: ${OIDC_JWK_SET_URI:-http://keycloak:8080/realms/fincore/protocol/openid-connect/certs}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-fincore-api}
+    depends_on:
+      keycloak: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  search-service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      args:
+        SERVICE: search-service
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      SEARCH_KAFKA_CONSUMER_AUTO_STARTUP: "true"
+      SEARCH_KAFKA_STREAMS_AUTO_STARTUP: "true"
+      SEARCH_ELASTICSEARCH_URI: http://elasticsearch:9200
+      SEARCH_MONGODB_URI: mongodb://mongodb:27017/fincore_search
+      SPRING_MONGODB_URI: mongodb://mongodb:27017/fincore_search
+      SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
+      FINCORE_SECURITY_MODE: oauth2
+      FINCORE_API_PUBLIC_BASE_URL: http://localhost:8000
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://localhost:8180/realms/fincore}
+      OIDC_JWK_SET_URI: ${OIDC_JWK_SET_URI:-http://keycloak:8080/realms/fincore/protocol/openid-connect/certs}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-fincore-api}
+    depends_on:
+      keycloak: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      elasticsearch: { condition: service_healthy }
+      mongodb: { condition: service_healthy }
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  kong:
+    image: kong:3.9.0
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 127.0.0.1:8001
+      KONG_LOG_LEVEL: warn
+    volumes:
+      - ./docker/kong/kong.yml:/kong/declarative/kong.yml:ro
+    depends_on:
+      loan-service: { condition: service_healthy }
+      ledger-service: { condition: service_healthy }
+      search-service: { condition: service_healthy }
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "kong health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres-data:
+  redis-data:
+  elasticsearch-data:
+  elasticsearch-data-v9:
+  mongodb-data:
